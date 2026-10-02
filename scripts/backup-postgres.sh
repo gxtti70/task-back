@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Load local environment vars from .env if present.
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 : "${DB_NAME:?Set DB_NAME before running the backup}"
 : "${DB_USER:?Set DB_USER before running the backup}"
 : "${DB_PASSWORD:?Set DB_PASSWORD before running the backup}"

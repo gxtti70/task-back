@@ -2,17 +2,25 @@
 
 ## Local configuration
 
-The API requires PostgreSQL and the following environment variables:
+Copy the example environment file and fill in your own local values before running the app:
 
-- `DB_URL` (defaults to `jdbc:postgresql://localhost:5432/taskmanager_db`)
-- `DB_USER` (defaults to `postgres`)
-- `DB_PASSWORD` (required)
-- `JWT_SECRET` (required; provide a unique, sufficiently long signing key)
-- `CORS_ALLOWED_ORIGINS` (comma-separated origins; defaults to `http://localhost:4200`)
-- `JPA_SHOW_SQL` (defaults to `false`; enable only for local debugging)
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `BACKUP_DIR` for the database backup script
+```bash
+cp .env.example .env
+```
 
-Do not commit real credentials or signing keys. Keep deployment origins explicit in `CORS_ALLOWED_ORIGINS`.
+The repository intentionally does not store real credentials. Keep secrets in `.env` (ignored by Git) and never commit sensitive values.
+
+The application expects environment variables such as:
+
+- `DB_URL`
+- `DB_USER`
+- `DB_PASSWORD`
+- `JWT_SECRET`
+- `CORS_ALLOWED_ORIGINS`
+- `JPA_SHOW_SQL`
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `BACKUP_DIR` for the backup script
+
+Use the values in `.env.example` as a template, and replace them with your own local configuration.
 
 Run the backend tests with `mvn test`.
 
@@ -20,4 +28,4 @@ Run the backend tests with `mvn test`.
 
 `GET /api/health` checks both the application and its PostgreSQL connection. It returns `503` without exposing connection details if the database is unavailable.
 
-Create a compressed logical backup with `scripts/backup-postgres.sh`. The script requires `DB_NAME`, `DB_USER`, and `DB_PASSWORD`; `DB_HOST`, `DB_PORT`, and `BACKUP_DIR` are optional. Store resulting files outside the server as well, encrypt them at rest, and periodically test restoration with `pg_restore`.
+Create a compressed logical backup with `scripts/backup-postgres.sh`. The script reads database-related environment variables from the local environment (typically via `.env`) and writes a dump file to the configured backup directory.
