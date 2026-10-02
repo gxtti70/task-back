@@ -1,17 +1,38 @@
 # Task Manager API
 
-Backend for a task and project management platform built with Spring Boot, PostgreSQL, and JWT-based authentication. The application supports user management, project organization, task tracking, and real-time-style notifications for collaborative workflows.
+<div align="center">
+
+![Java 17](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.0-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12%2B-336791?style=for-the-badge&logo=postgresql&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-Auth-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-Build-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)
+
+</div>
+
+Backend for a task and project management platform built with Spring Boot, PostgreSQL, and JWT-based authentication. The application supports user management, project organization, task tracking, and notification-driven collaboration for modern team workflows.
 
 ## Overview
 
 This project provides a robust backend for a task management system inspired by Jira-style workflows. It enables:
 
-- User registration and authentication
+- User registration and login with JWT authentication
 - Role-based access control
 - Project creation and member management
 - Task creation, updates, assignment, and status tracking
-- Notification delivery for system and user events
+- Notification delivery for project and user events
 - Health checks and database backup automation
+
+## Features
+
+- Secure authentication and authorization with Spring Security
+- Project lifecycle management with ownership and permissions
+- Task tracking with statuses and priorities
+- Collaborative project membership management
+- Custom user directory and admin user operations
+- PostgreSQL persistence with JPA
+- Backup script for logical database dumps
+- Health endpoint for monitoring and deployment checks
 
 ## Tech Stack
 
@@ -23,17 +44,18 @@ This project provides a robust backend for a task management system inspired by 
 - PostgreSQL
 - JWT (jjwt)
 - Maven
+- Lombok
 
 ## Architecture
 
 The project follows a clean layered architecture:
 
-- `controller`: REST APIs for authentication, projects, tasks, notifications, and health endpoints
+- `controller`: REST APIs for authentication, projects, tasks, notifications, and health
 - `service`: business logic and orchestration
-- `repository`: persistence access using Spring Data repositories
-- `entity`: JPA entities for users, projects, tasks, and notifications
+- `repository`: Spring Data repositories for persistence access
+- `entity`: JPA entities for users, projects, tasks, notifications, and relationships
 - `dto`: request/response models
-- `security`: JWT and authentication configuration
+- `security`: JWT utilities, user details, and security configuration
 - `config`: application configuration
 
 ## Project Structure
@@ -73,17 +95,26 @@ Before running the project, make sure you have:
 - PostgreSQL 12+
 - A local or remote PostgreSQL instance
 
-## Local Configuration
+## Getting Started
 
-1. Copy the sample environment file:
+### 1) Clone the repository
+
+```bash
+git clone https://github.com/gxtti70/task-back.git
+cd task-back
+```
+
+### 2) Configure environment variables
+
+Copy the sample environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Update the values in `.env` with your local credentials and configuration.
+Then update the values in `.env` with your local configuration.
 
-Example variables:
+Example:
 
 ```env
 DB_URL=jdbc:postgresql://localhost:5432/taskmanager_db
@@ -176,7 +207,7 @@ DELETE /api/tasks/{id}
 ### Notifications
 
 ```text
-GET /api/notifications
+GET  /api/notifications
 POST /api/notifications/{id}/read
 ```
 
@@ -196,7 +227,7 @@ A PostgreSQL logical backup utility is included at:
 scripts/backup-postgres.sh
 ```
 
-This script loads environment variables from `.env` when available and creates a compressed custom dump using `pg_dump`.
+This script loads environment variables from `.env` when available and creates a PostgreSQL custom dump using `pg_dump`.
 
 Example:
 
@@ -228,10 +259,6 @@ These values are mapped in `src/main/resources/application.properties`.
 - Access controls are enforced with method-level authorization annotations.
 - Only trusted origins should be configured in `CORS_ALLOWED_ORIGINS`.
 
-## License
-
-This project is currently distributed without an explicit license file. If you plan to publish or share it publicly, consider adding a license such as MIT or Apache 2.0.
-
 ## Contributing
 
 Contributions are welcome. To contribute:
@@ -253,4 +280,4 @@ For technical issues, configuration questions, or deployment support, open an is
 
 ---
 
-Built with Spring Boot for a modern, scalable task management backend.
+Built with Spring Boot for a scalable, modern task management backend.
