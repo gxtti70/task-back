@@ -7,6 +7,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
 import java.util.List;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Data
@@ -16,6 +17,7 @@ public class TaskRequest {
     private TaskStatus status;
     private TaskPriority priority;
     @PositiveOrZero private Integer storyPoints;
+    private LocalDate dueDate;
     private List<String> tags;
     private UUID projectId;
     private UUID assigneeId;

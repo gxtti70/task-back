@@ -71,7 +71,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/tasks", "/api/projects")
                     .hasAnyRole("ADMIN", "SCRUM", "MANAGER")
                 .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/auth/me").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/subscriptions/webhook").permitAll()
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
 

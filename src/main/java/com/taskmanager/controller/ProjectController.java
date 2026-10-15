@@ -12,6 +12,7 @@ import com.taskmanager.repository.ProjectRepository;
 import com.taskmanager.repository.TaskRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.service.NotificationEventService;
+import com.taskmanager.service.SubscriptionService;
 import com.taskmanager.security.RoleNames;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class ProjectController {
     private final ProjectMemberRepository memberRepository;
     private final UserRepository userRepository;
     private final NotificationEventService notifications;
+    private final SubscriptionService subscriptions;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -48,6 +50,7 @@ public class ProjectController {
     @Transactional
     public ProjectResponse createProject(@Valid @RequestBody ProjectRequest request, Authentication authentication) {
         User owner = currentUser(authentication);
+        subscriptions.checkCanCreateProject(owner.getId());
         Project project = Project.builder().name(request.getName().trim()).description(request.getDescription())
                 .status(validateStatus(request.getStatus())).owner(owner).build();
         Project saved = projectRepository.save(project);
@@ -94,6 +97,7 @@ public class ProjectController {
         if (memberRepository.existsByProject_IdAndUser_Id(id, user.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El usuario ya pertenece al proyecto");
         }
+        subscriptions.checkCanAddMember(project);
         ProjectMember member = memberRepository.save(ProjectMember.builder().project(project).user(user).build());
         notifications.notifyUser(user, "Te añadieron a un proyecto", "Ahora participas en " + project.getName(), "/dashboard/projects");
         return new ProjectMemberResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole(), member.getJoinedAt());

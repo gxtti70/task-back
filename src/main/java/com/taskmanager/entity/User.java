@@ -30,6 +30,24 @@ public class User {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
+    @Column(name = "avatar_data", columnDefinition = "TEXT")
+    private String avatarData;
+
+    @Column(name = "profile_timezone", length = 64)
+    private String profileTimezone;
+
+    @Column(name = "week_starts_on")
+    private Integer weekStartsOn;
+
+    @Column(name = "profile_job_title", length = 100)
+    private String profileJobTitle;
+
+    @Column(name = "profile_bio", length = 500)
+    private String profileBio;
+
+    @Column(name = "profile_accent_color", length = 7)
+    private String profileAccentColor;
+
     @NotBlank
     @Column(name = "password_hash", nullable = false)
     private String password;

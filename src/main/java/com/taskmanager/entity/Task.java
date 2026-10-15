@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.GenericGenerator;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +42,9 @@ public class Task {
     @Column(name = "story_points", nullable = false)
     @Builder.Default
     private Integer storyPoints = 1;
+
+    @Column(name = "due_date")
+    private LocalDate dueDate;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "assignee_id", nullable = false)

@@ -52,6 +52,7 @@ public class TaskController {
                 .status(request.getStatus() == null ? TaskStatus.TODO : request.getStatus())
                 .priority(request.getPriority() == null ? TaskPriority.MEDIUM : request.getPriority())
                 .storyPoints(request.getStoryPoints() == null ? 1 : request.getStoryPoints())
+                .dueDate(request.getDueDate())
                 .tags(cleanTags(request.getTags())).assignee(assignee).project(project).build();
         Task saved = taskRepository.save(task);
         addMember(project, assignee);
@@ -81,6 +82,7 @@ public class TaskController {
         if (request.getStatus() != null) task.setStatus(request.getStatus());
         if (request.getPriority() != null) task.setPriority(request.getPriority());
         if (request.getStoryPoints() != null) task.setStoryPoints(request.getStoryPoints());
+        task.setDueDate(request.getDueDate());
         if (request.getTags() != null) task.setTags(cleanTags(request.getTags()));
         task.setAssignee(assignee);
         task.setProject(project);
@@ -159,7 +161,7 @@ public class TaskController {
         String avatar = "https://ui-avatars.com/api/?name=" + URLEncoder.encode(displayName, StandardCharsets.UTF_8)
                 + "&background=27272a&color=a1a1aa&bold=true";
         return new TaskResponse(task.getId(), task.getTitle(), task.getDescription(), task.getStatus(),
-                task.getPriority(), task.getStoryPoints(),
+                task.getPriority(), task.getStoryPoints(), task.getDueDate(),
                 new UserSummaryResponse(user.getId(), user.getEmail(), displayName, user.getRole(), avatar),
                 List.copyOf(task.getTags()), task.getProject() == null ? null : task.getProject().getId(), task.getCreatedAt());
     }

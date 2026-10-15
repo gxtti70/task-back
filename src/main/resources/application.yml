@@ -1,0 +1,44 @@
+taskmanager:
+  plans:
+    free:
+      maxProjects: 3
+      maxMembersPerProject: 5
+      price: 0
+      currency: USD
+      features: [Tableros Kanban, Gestión básica de tareas]
+      capabilities:
+        attachments: false
+      maxAttachmentMB: 0
+      maxAttachmentsPerTask: 0
+    premium:
+      maxProjects: 15
+      maxMembersPerProject: 999
+      price: 4.99
+      currency: USD
+      stripePriceId: ${STRIPE_PREMIUM_PRICE:}
+      features: [Hasta 15 proyectos, Equipos grandes]
+      capabilities:
+        attachments: true
+      maxAttachmentMB: 10
+      maxAttachmentsPerTask: 10
+    premiumPlus:
+      maxProjects: -1
+      maxMembersPerProject: -1
+      price: 9.99
+      currency: USD
+      stripePriceId: ${STRIPE_PLUS_PRICE:}
+      features: [Proyectos ilimitados, Miembros ilimitados]
+      capabilities:
+        attachments: true
+      maxAttachmentMB: 50
+      maxAttachmentsPerTask: 50
+  billing:
+    simulate: ${BILLING_SIMULATE:true}
+    stripeSecretKey: ${STRIPE_SECRET_KEY:}
+    stripeWebhookSecret: ${STRIPE_WEBHOOK_SECRET:}
+    frontendUrl: ${FRONTEND_URL:http://localhost:4200}
+  storage:
+    localDirectory: ${ATTACHMENTS_LOCAL_DIRECTORY:./data/attachments}
+    s3:
+      region: ${AWS_REGION:us-east-1}
+      bucket: ${ATTACHMENTS_S3_BUCKET:}

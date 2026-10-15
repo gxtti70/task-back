@@ -249,8 +249,19 @@ The application reads the following key values from environment variables:
 - `DB_PORT`
 - `DB_NAME`
 - `BACKUP_DIR`
+- `BILLING_SIMULATE` (defaults to `true`; uses local attachment storage)
+- `ATTACHMENTS_LOCAL_DIRECTORY` (defaults to `./data/attachments`)
+- `AWS_REGION` and `ATTACHMENTS_S3_BUCKET` when `BILLING_SIMULATE=false`
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PREMIUM_PRICE`, `STRIPE_PLUS_PRICE`
+- `FRONTEND_URL` (used for password-reset email links)
 
-These values are mapped in `src/main/resources/application.properties`.
+These values are mapped in `src/main/resources/application.properties` and `application.yml`.
+
+## Task attachments
+
+With simulated billing, attachments are stored under `ATTACHMENTS_LOCAL_DIRECTORY`. Premium and Premium Plus plans allow attachments, with per-plan size and task-count limits in `application.yml`.
+
+For production, set `BILLING_SIMULATE=false`, `AWS_REGION`, and `ATTACHMENTS_S3_BUCKET`, and provide credentials through the AWS SDK default credentials chain (prefer an IAM role).
 
 ## Security Notes
 
