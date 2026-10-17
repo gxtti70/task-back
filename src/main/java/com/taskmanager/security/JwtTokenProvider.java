@@ -41,16 +41,23 @@ public class JwtTokenProvider {
     }
 
     public String generateRefreshToken(Authentication authentication) {
+        return generateRefreshToken(authentication, UUID.randomUUID());
+    }
+
+    public String generateRefreshToken(Authentication authentication, UUID familyId) {
         UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
         return Jwts.builder()
                 .setSubject(userPrincipal.getUsername())
                 .setId(UUID.randomUUID().toString())
+                .claim("family", familyId.toString())
                 .claim("type", "refresh")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + jwtConfig.getRefreshExpiration()))
                 .signWith(signingKey, SignatureAlgorithm.HS512)
                 .compact();
     }
+
+    public long refreshExpirationSeconds() { return jwtConfig.getRefreshExpiration() / 1000; }
 
     public String getUsernameFromToken(String token) {
         Claims claims = Jwts.parserBuilder()

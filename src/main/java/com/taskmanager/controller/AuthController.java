@@ -4,6 +4,7 @@ import com.taskmanager.dto.request.AdminUserUpdateRequest;
 import com.taskmanager.dto.request.ForgotPasswordRequest;
 import com.taskmanager.dto.request.LoginRequest;
 import com.taskmanager.dto.request.RegisterRequest;
+import com.taskmanager.dto.request.RegistrationRequest;
 import com.taskmanager.dto.request.ProfileUpdateRequest;
 import com.taskmanager.dto.request.ResetPasswordRequest;
 import com.taskmanager.dto.response.AdminUserResponse;
@@ -12,6 +13,7 @@ import com.taskmanager.dto.response.MessageResponse;
 import com.taskmanager.dto.response.ProfileResponse;
 import com.taskmanager.entity.PasswordResetToken;
 import com.taskmanager.entity.User;
+import com.taskmanager.config.AuthCookieService;
 import com.taskmanager.repository.PasswordResetTokenRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.JwtTokenProvider;
@@ -21,11 +23,16 @@ import com.taskmanager.security.EmailAddresses;
 import com.taskmanager.service.EmailService;
 import com.taskmanager.service.NotificationEventService;
 import com.taskmanager.service.SubscriptionService;
+import com.taskmanager.service.RefreshTokenService;
+import com.taskmanager.service.ConsentService;
 import com.taskmanager.entity.SubscriptionTier;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -35,6 +42,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -62,28 +70,45 @@ public class AuthController {
     private final SubscriptionService subscriptions;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+    private final RefreshTokenService refreshTokens;
+    private final AuthCookieService authCookies;
+    private final ConsentService consents;
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody RegistrationRequest request,
+                                          HttpServletRequest httpRequest) {
+        if (!request.isAcceptTerms() || !request.isAcceptPrivacy()) {
+            return ResponseEntity.badRequest().body(
+                    "Error: Debes aceptar los Términos y Condiciones y la Política de Tratamiento de Datos Personales");
+        }
+        if (!consents.versionsMatch(request.getTermsVersion(), request.getPrivacyVersion())) {
+            return ResponseEntity.badRequest().body(
+                    "Error: Los documentos legales fueron actualizados. Recarga la página e inténtalo de nuevo.");
+        }
         String email = EmailAddresses.normalize(request.getEmail());
         if (userRepository.existsByEmailIgnoreCase(email)) return ResponseEntity.badRequest().body("Error: El email ya está en uso");
         User user = User.builder().fullName(request.getFullName()).email(email)
                 .password(passwordEncoder.encode(request.getPassword())).role(RoleNames.normalize("DEVELOPER")).build();
         userRepository.save(user);
+        consents.recordRegistration(user, request.getTermsVersion(), request.getPrivacyVersion(), httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body("Usuario registrado exitosamente");
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         String email = EmailAddresses.normalize(request.getEmail());
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, request.getPassword()));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String accessToken = tokenProvider.generateAccessToken(authentication);
-        String refreshToken = tokenProvider.generateRefreshToken(authentication);
         User user = userRepository.findByEmailIgnoreCase(email).orElseThrow();
-        return ResponseEntity.ok(new JwtResponse(accessToken, refreshToken, user.getEmail(), RoleNames.normalize(user.getRole()), user.getId(), user.getFullName()));
+        String refreshToken = refreshTokens.create(user, authentication);
+        authCookies.setSession(response, accessToken, refreshToken);
+        return ResponseEntity.ok(new JwtResponse(null, null, user.getEmail(), RoleNames.normalize(user.getRole()), user.getId(), user.getFullName()));
     }
+
+    @GetMapping("/csrf")
+    public String csrf(CsrfToken token) { return token.getToken(); }
 
     @GetMapping("/me")
     public ProfileResponse getCurrentProfile(Authentication authentication) {
@@ -191,7 +216,8 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    @Transactional
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletResponse response) {
         PasswordResetToken token = passwordResetTokenRepository.findByToken(request.getToken())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token inválido"));
         if (token.isUsed()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El token ya fue utilizado");
@@ -200,23 +226,37 @@ public class AuthController {
         User user = token.getUser();
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         userRepository.save(user);
+        refreshTokens.revokeUser(user.getId());
         token.setUsed(true);
         passwordResetTokenRepository.save(token);
+        authCookies.clear(response);
         return ResponseEntity.ok(new MessageResponse("Contraseña actualizada exitosamente"));
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
-        String refreshToken = request.get("refreshToken");
-        if (refreshToken == null || !tokenProvider.validateToken(refreshToken)
-                || !tokenProvider.isRefreshToken(refreshToken)) {
+    public ResponseEntity<?> refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = authCookies.read(request, AuthCookieService.REFRESH_COOKIE);
+        try {
+            if (refreshToken == null || !tokenProvider.validateToken(refreshToken) || !tokenProvider.isRefreshToken(refreshToken)) {
+                throw new RefreshTokenService.InvalidRefreshTokenException();
+            }
+            String nextRefreshToken = refreshTokens.rotate(refreshToken);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(tokenProvider.getUsernameFromToken(nextRefreshToken));
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    userDetails, null, userDetails.getAuthorities());
+            authCookies.setSession(response, tokenProvider.generateAccessToken(authentication), nextRefreshToken);
+            return ResponseEntity.ok(Map.of("refreshed", true));
+        } catch (RefreshTokenService.InvalidRefreshTokenException ex) {
+            authCookies.clear(response);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Refresh token inválido o expirado");
         }
-        UserDetails userDetails = userDetailsService.loadUserByUsername(tokenProvider.getUsernameFromToken(refreshToken));
-        if (!userDetails.isEnabled()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("La cuenta está desactivada");
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                userDetails, null, userDetails.getAuthorities());
-        return ResponseEntity.ok(Map.of("accessToken", tokenProvider.generateAccessToken(authentication)));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
+        refreshTokens.revoke(authCookies.read(request, AuthCookieService.REFRESH_COOKIE));
+        authCookies.clear(response);
+        return ResponseEntity.ok(new MessageResponse("Sesión cerrada"));
     }
 
     @GetMapping("/admin/users")

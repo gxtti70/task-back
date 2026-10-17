@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import com.taskmanager.config.AuthCookieService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,6 +26,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsService userDetailsService;
+    private final AuthCookieService authCookies;
 
     // Solo se omiten endpoints públicos de autenticación. Las rutas administrativas
     // bajo /api/auth también deben validar el JWT para que @PreAuthorize funcione.
@@ -34,6 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return path.equals("/api/auth/login")
                 || path.equals("/api/auth/register")
                 || path.equals("/api/auth/refresh")
+                || path.equals("/api/auth/csrf")
                 || path.startsWith("/swagger-ui/")
                 || path.startsWith("/v3/api-docs");
     }
@@ -68,6 +71,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Extraemos y limpiamos cualquier espacio o salto de línea fantasma
         return bearerToken.substring(7).trim();
     }
-    return null;
+    return authCookies.read(request, AuthCookieService.ACCESS_COOKIE);
 }
 }

@@ -15,16 +15,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_job_title VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_bio VARCHAR(500);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_accent_color VARCHAR(7);
 
--- Store roles in uppercase and accept every role supported by the API.
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-UPDATE users
-SET role = upper(regexp_replace(btrim(role), '^(ROLE_)+', '', 'i'))
-WHERE role IS DISTINCT FROM upper(regexp_replace(btrim(role), '^(ROLE_)+', '', 'i'));
 ALTER TABLE users ADD CONSTRAINT users_role_check
     CHECK (role IN ('ADMIN', 'MANAGER', 'SCRUM', 'DEVELOPER'));
 
--- Canonical emails prevent duplicate accounts that differ only by case or spaces.
-UPDATE users SET email = lower(btrim(email)) WHERE email IS DISTINCT FROM lower(btrim(email));
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_normalized_unique_idx ON users (lower(btrim(email)));
 
 CREATE TABLE IF NOT EXISTS projects (

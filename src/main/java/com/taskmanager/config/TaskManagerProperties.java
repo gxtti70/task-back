@@ -15,6 +15,7 @@ public class TaskManagerProperties {
     private Map<String, Plan> plans = new HashMap<>();
     private Billing billing = new Billing();
     private Storage storage = new Storage();
+    private Legal legal = new Legal();
     @Getter @Setter public static class Plan {
         private int maxProjects;
         private int maxMembersPerProject;
@@ -39,5 +40,15 @@ public class TaskManagerProperties {
     @Getter @Setter public static class S3 {
         private String region = "us-east-1";
         private String bucket = "";
+    }
+    @Getter @Setter public static class Legal {
+        private String termsVersion = "1.0";
+        private String privacyVersion = "1.0";
+        private String cookiesVersion = "1.0";
+        private String effectiveDate = "2026-10-16";
+        private String controllerName = "[RAZÓN SOCIAL]";
+        private String controllerTaxId = "[NIT]";
+        private String controllerAddress = "[DOMICILIO]";
+        private String privacyEmail = "privacidad@example.com";
     }
 }
