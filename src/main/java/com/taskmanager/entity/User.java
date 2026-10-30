@@ -52,6 +52,9 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String password;
 
+    @Column(name = "google_subject", length = 255)
+    private String googleSubject;
+
     @NotBlank
     @Column(nullable = false)
     private String role;

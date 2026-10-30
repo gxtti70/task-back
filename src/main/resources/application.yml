@@ -1,4 +1,7 @@
 taskmanager:
+  auth:
+    google:
+      enabled: ${GOOGLE_OAUTH_ENABLED:false}
   plans:
     free:
       maxProjects: 3

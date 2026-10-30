@@ -1,5 +1,7 @@
 package com.taskmanager.config;
 
+import com.taskmanager.security.GoogleLoginFailureHandler;
+import com.taskmanager.security.GoogleLoginSuccessHandler;
 import com.taskmanager.security.JwtAuthenticationFilter;
 import com.taskmanager.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Arrays;
@@ -37,6 +40,11 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthCookieService authCookies;
+    private final ObjectProvider<GoogleLoginSuccessHandler> googleSuccessHandler;
+    private final ObjectProvider<GoogleLoginFailureHandler> googleFailureHandler;
+
+    @Value("${taskmanager.auth.google.enabled:false}")
+    private boolean googleOAuthEnabled;
 
     @Value("${cors.allowed-origins:http://localhost:4300}")
     private String allowedOrigins;
@@ -108,6 +116,7 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "SCRUM", "MANAGER")
                 .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/auth/me").authenticated()
+                .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/subscriptions/webhook").permitAll()
                 // Versiones legales vigentes: públicas (se muestran antes de autenticarse).
@@ -120,6 +129,12 @@ public class SecurityConfig {
                 // Cualquier otra petición requiere JWT
                 .anyRequest().authenticated()
             );
+
+        if (googleOAuthEnabled) {
+            http.oauth2Login(oauth2 -> oauth2
+                    .successHandler(googleSuccessHandler.getObject())
+                    .failureHandler(googleFailureHandler.getObject()));
+        }
 
         // 5. Filtro de JWT
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -14,6 +14,7 @@ import com.taskmanager.dto.response.ProfileResponse;
 import com.taskmanager.entity.PasswordResetToken;
 import com.taskmanager.entity.User;
 import com.taskmanager.config.AuthCookieService;
+import com.taskmanager.config.TaskManagerProperties;
 import com.taskmanager.repository.PasswordResetTokenRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.JwtTokenProvider;
@@ -27,11 +28,15 @@ import com.taskmanager.service.RefreshTokenService;
 import com.taskmanager.service.ConsentService;
 import com.taskmanager.entity.SubscriptionTier;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -73,6 +78,43 @@ public class AuthController {
     private final RefreshTokenService refreshTokens;
     private final AuthCookieService authCookies;
     private final ConsentService consents;
+    private final TaskManagerProperties properties;
+
+    @Value("${taskmanager.auth.google.enabled:false}")
+    private boolean googleOAuthEnabled;
+
+    @GetMapping("/google/authorize")
+    public ResponseEntity<Void> authorizeWithGoogle() {
+        if (!googleOAuthEnabled) {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(java.net.URI.create(properties.getBilling().getFrontendUrl() + "/auth/login?googleError=not_configured"))
+                    .build();
+        }
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(java.net.URI.create("/oauth2/authorization/google"))
+                .build();
+    }
+
+    @PostMapping("/google/consent")
+    public ResponseEntity<?> prepareGoogleRegistration(@Valid @RequestBody GoogleConsentRequest request,
+                                                        HttpServletRequest httpRequest) {
+        if (!googleOAuthEnabled) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "El acceso con Google no está configurado.");
+        }
+        if (!request.acceptTerms() || !request.acceptPrivacy()
+                || !consents.versionsMatch(request.termsVersion(), request.privacyVersion())) {
+            return ResponseEntity.badRequest().body("Error: Debes aceptar las versiones vigentes de los documentos legales.");
+        }
+        HttpSession session = httpRequest.getSession(true);
+        session.setAttribute("googleTermsVersion", request.termsVersion());
+        session.setAttribute("googlePrivacyVersion", request.privacyVersion());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record GoogleConsentRequest(@AssertTrue boolean acceptTerms,
+                                       @AssertTrue boolean acceptPrivacy,
+                                       @NotBlank String termsVersion,
+                                       @NotBlank String privacyVersion) {}
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegistrationRequest request,

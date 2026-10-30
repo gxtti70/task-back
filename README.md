@@ -181,6 +181,14 @@ Examples include:
 - `POST /api/auth/refresh`
 - `GET /api/auth/admin/users`
 
+### Google sign-in
+
+Google OAuth is disabled by default. To enable it in the deployed backend, set `GOOGLE_OAUTH_ENABLED=true`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `FRONTEND_URL` in the backend's deployment environment. Keep the client secret only on the backend.
+
+`GOOGLE_REDIRECT_URI` must exactly match an authorized redirect URI in Google Cloud. For the local Compose stack, use `http://localhost:4300/login/oauth2/code/google`. For the deployed app behind the same-origin Vercel rewrites, use `https://<frontend-domain>/login/oauth2/code/google`; the rewrites forward that callback to the backend. Set `FRONTEND_URL` to the deployed frontend origin.
+
+Google sign-in creates new accounts with the `DEVELOPER` role and records the accepted terms and privacy versions. It reuses the existing HttpOnly session cookies. The backend validates Google's OpenID Connect identity and stores its stable subject. Email-based account linking is limited to Gmail addresses and Google Workspace accounts with a hosted-domain claim; other email providers need an additional verification flow.
+
 ## API Highlights
 
 ### Projects

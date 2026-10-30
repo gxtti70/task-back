@@ -17,6 +17,9 @@ Esta matriz documenta las variables que consume actualmente el backend y el Comp
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Vacíos si se simula | Claves de prueba, almacenadas como secretos del CI | Claves live del gestor de secretos |
 | `STRIPE_PREMIUM_PRICE`, `STRIPE_PLUS_PRICE` | IDs de precio de prueba opcionales | IDs creados en cuenta Stripe de prueba | IDs live que correspondan al catálogo |
 | `FRONTEND_URL` | `http://localhost:4300` | URL de frontend de pruebas | URL HTTPS pública, usada por enlaces de restablecimiento |
+| `GOOGLE_OAUTH_ENABLED` | `false` hasta configurar OAuth | `true` solo con credenciales de prueba | `true` cuando client ID/secret estén en el gestor de secretos |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Credenciales OAuth de desarrollo | Credenciales de cliente OAuth de pruebas | Client ID público y secret privado de Google Cloud, solo en el backend |
+| `GOOGLE_REDIRECT_URI` | `http://localhost:4300/login/oauth2/code/google` | Callback HTTPS del frontend de pruebas | `https://<frontend-domain>/login/oauth2/code/google`; debe coincidir exactamente en Google Cloud |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Valores locales o vacíos si el correo está simulado | Servidor de correo de pruebas o capturador local | Proveedor de correo real; credenciales secretas y remitente verificado |
 | `ATTACHMENTS_LOCAL_DIRECTORY` | Directorio local/volumen persistente | Directorio temporal de pruebas | Preferir S3; no usar disco efímero del contenedor |
 | `ATTACHMENTS_S3_BUCKET`, `AWS_REGION` | Opcionales | Bucket aislado si se prueba integración | Bucket de producción y región aprobada |
