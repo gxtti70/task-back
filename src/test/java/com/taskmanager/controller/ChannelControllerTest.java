@@ -11,6 +11,7 @@ import com.taskmanager.entity.Project;
 import com.taskmanager.entity.User;
 import com.taskmanager.repository.*;
 import com.taskmanager.service.ChatFileService;
+import com.taskmanager.service.ChatUnreadService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Pageable;
@@ -39,8 +40,9 @@ class ChannelControllerTest {
     private final ProjectMemberRepository projectMembers = mock(ProjectMemberRepository.class);
     private final UserRepository users = mock(UserRepository.class);
     private final ChatFileService chatFileService = mock(ChatFileService.class);
+    private final ChatUnreadService chatUnreadService = mock(ChatUnreadService.class);
     private final ChannelController controller = new ChannelController(channels, channelMembers, messages,
-            projects, projectMembers, users, chatFileService);
+            projects, projectMembers, users, chatFileService, chatUnreadService);
 
     private static User user(UUID id, String email) {
         return User.builder().id(id).email(email).fullName("User " + id).role("DEVELOPER").active(true).build();

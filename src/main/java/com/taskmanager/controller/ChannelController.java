@@ -18,6 +18,7 @@ import com.taskmanager.repository.ProjectRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.RoleNames;
 import com.taskmanager.service.ChatFileService;
+import com.taskmanager.service.ChatUnreadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -55,6 +56,7 @@ public class ChannelController {
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
     private final ChatFileService chatFileService;
+    private final ChatUnreadService chatUnreadService;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -175,6 +177,36 @@ public class ChannelController {
                                            @PathVariable UUID messageId,
                                            Authentication authentication) {
         chatFileService.deleteFile(id, messageId, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/unread-count")
+    @Transactional(readOnly = true)
+    public Long unreadCount(@PathVariable UUID id, Authentication authentication) {
+        return chatUnreadService.unreadCount(id, authentication.getName());
+    }
+
+    @GetMapping("/unread-counts")
+    @Transactional(readOnly = true)
+    public Map<UUID, Long> unreadCounts(Authentication authentication) {
+        var actor = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        var members = channelMemberRepository.findByUser_Id(actor.getId());
+        var counts = new java.util.LinkedHashMap<UUID, Long>();
+        for (var member : members) {
+            var channelId = member.getChannel().getId();
+            var lastRead = member.getLastReadAt();
+            var count = messageRepository.countByChannel_IdAndCreatedAtAfter(
+                    channelId, lastRead == null ? LocalDateTime.MIN : lastRead);
+            if (count > 0) counts.put(channelId, count);
+        }
+        return counts;
+    }
+
+    @PostMapping("/{id}/read")
+    @Transactional
+    public ResponseEntity<Void> markAsRead(@PathVariable UUID id, Authentication authentication) {
+        chatUnreadService.markAsRead(id, authentication.getName());
         return ResponseEntity.noContent().build();
     }
 

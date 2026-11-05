@@ -28,4 +28,6 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                              @Param("cursorCreated") LocalDateTime cursorCreated,
                              @Param("cursorId") UUID cursorId,
                              Pageable limit);
+
+    Long countByChannel_IdAndCreatedAtAfter(UUID channelId, LocalDateTime after);
 }

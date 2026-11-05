@@ -9,5 +9,7 @@ import java.util.UUID;
 public interface ChannelMemberRepository extends JpaRepository<ChannelMember, UUID> {
     List<ChannelMember> findByChannel_IdOrderByJoinedAtAsc(UUID channelId);
     boolean existsByChannel_IdAndUser_Id(UUID channelId, UUID userId);
+    ChannelMember findByChannel_IdAndUser_Id(UUID channelId, UUID userId);
+    List<ChannelMember> findByUser_Id(UUID userId);
     void deleteByChannel_IdAndUser_Id(UUID channelId, UUID userId);
 }
