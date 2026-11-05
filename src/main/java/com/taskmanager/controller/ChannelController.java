@@ -17,16 +17,21 @@ import com.taskmanager.repository.ProjectMemberRepository;
 import com.taskmanager.repository.ProjectRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.RoleNames;
+import com.taskmanager.service.ChatFileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -49,6 +54,7 @@ public class ChannelController {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final UserRepository userRepository;
+    private final ChatFileService chatFileService;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -145,6 +151,33 @@ public class ChannelController {
         return toMessageResponse(message);
     }
 
+    @PostMapping("/{id}/messages/file")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
+    public ChatMessageResponse uploadFile(@PathVariable UUID id,
+                                          @RequestParam("file") MultipartFile file,
+                                          @RequestParam(name = "body", required = false) String body,
+                                          Authentication authentication) {
+        return chatFileService.saveFileMessage(id, file, body, authentication.getName());
+    }
+
+    @GetMapping("/{id}/messages/{messageId}/file")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> downloadFile(@PathVariable UUID id,
+                                                 @PathVariable UUID messageId,
+                                                 Authentication authentication) {
+        return chatFileService.downloadFile(id, messageId, authentication.getName());
+    }
+
+    @DeleteMapping("/{id}/messages/{messageId}/file")
+    @Transactional
+    public ResponseEntity<Void> deleteFile(@PathVariable UUID id,
+                                           @PathVariable UUID messageId,
+                                           Authentication authentication) {
+        chatFileService.deleteFile(id, messageId, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     private Channel requireChannelAccess(UUID channelId, User actor) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Canal no encontrado"));
@@ -210,6 +243,10 @@ public class ChannelController {
         String name = author.getFullName() == null || author.getFullName().isBlank()
                 ? author.getEmail() : author.getFullName();
         return new ChatMessageResponse(message.getId(), message.getBody(), author.getId(), name,
-                author.getEmail(), message.getCreatedAt());
+                author.getEmail(), message.getCreatedAt(), message.getMessageType(),
+                message.getFileName(), message.getFileContentType(), message.getFileSizeBytes(),
+                message.getFileStorageKey() != null
+                        ? "/api/channels/" + message.getChannel().getId() + "/messages/" + message.getId() + "/file"
+                        : null);
     }
 }

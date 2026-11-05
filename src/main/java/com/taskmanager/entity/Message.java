@@ -31,6 +31,22 @@ public class Message {
     @Column(nullable = false, length = 2000, updatable = false)
     private String body;
 
+    @Column(length = 255)
+    private String fileName;
+
+    @Column(length = 150)
+    private String fileContentType;
+
+    @Column
+    private Long fileSizeBytes;
+
+    @Column(length = 36)
+    private String fileStorageKey;
+
+    @Builder.Default
+    @Column(nullable = false, length = 10, updatable = false)
+    private String messageType = "TEXT";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
