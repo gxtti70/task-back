@@ -25,7 +25,7 @@ class ProjectLimitControllerTest {
         UserRepository users = mock(UserRepository.class);
         SubscriptionService subscriptions = mock(SubscriptionService.class);
         var controller = new ProjectController(projects, mock(TaskRepository.class), mock(ProjectMemberRepository.class),
-                users, mock(NotificationEventService.class), subscriptions);
+                users, mock(NotificationEventService.class), subscriptions, mock(ChannelRepository.class));
         when(users.findByEmail(anyString())).thenReturn(Optional.of(owner));
         doThrow(new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, "Plan limit reached"))
                 .when(subscriptions).checkCanCreateProject(ownerId);

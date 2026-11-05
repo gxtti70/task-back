@@ -6,7 +6,9 @@ import com.taskmanager.dto.response.ProjectMemberResponse;
 import com.taskmanager.dto.response.ProjectResponse;
 import com.taskmanager.entity.Project;
 import com.taskmanager.entity.ProjectMember;
+import com.taskmanager.entity.Channel;
 import com.taskmanager.entity.User;
+import com.taskmanager.repository.ChannelRepository;
 import com.taskmanager.repository.ProjectMemberRepository;
 import com.taskmanager.repository.ProjectRepository;
 import com.taskmanager.repository.TaskRepository;
@@ -38,6 +40,7 @@ public class ProjectController {
     private final UserRepository userRepository;
     private final NotificationEventService notifications;
     private final SubscriptionService subscriptions;
+    private final ChannelRepository channelRepository;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -55,6 +58,8 @@ public class ProjectController {
                 .status(validateStatus(request.getStatus())).owner(owner).build();
         Project saved = projectRepository.save(project);
         memberRepository.save(ProjectMember.builder().project(saved).user(owner).build());
+        channelRepository.save(Channel.builder().type(Channel.TYPE_TEXT).name("General")
+                .project(saved).createdBy(owner).build());
         notifications.broadcastExcept(Set.of(owner.getId()), "Nuevo proyecto",
                 owner.getFullName() + " creó el proyecto " + saved.getName(), "/dashboard/projects");
         return toResponse(saved);

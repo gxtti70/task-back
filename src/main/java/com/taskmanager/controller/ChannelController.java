@@ -1,0 +1,215 @@
+package com.taskmanager.controller;
+
+import com.taskmanager.dto.request.ChannelRequest;
+import com.taskmanager.dto.request.ChatMessageRequest;
+import com.taskmanager.dto.request.DirectChannelRequest;
+import com.taskmanager.dto.response.ChannelResponse;
+import com.taskmanager.dto.response.ChatMessageResponse;
+import com.taskmanager.entity.Channel;
+import com.taskmanager.entity.ChannelMember;
+import com.taskmanager.entity.Message;
+import com.taskmanager.entity.Project;
+import com.taskmanager.entity.User;
+import com.taskmanager.repository.ChannelMemberRepository;
+import com.taskmanager.repository.ChannelRepository;
+import com.taskmanager.repository.MessageRepository;
+import com.taskmanager.repository.ProjectMemberRepository;
+import com.taskmanager.repository.ProjectRepository;
+import com.taskmanager.repository.UserRepository;
+import com.taskmanager.security.RoleNames;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/channels")
+@RequiredArgsConstructor
+public class ChannelController {
+    private static final int MAX_MESSAGE_PAGE_SIZE = 100;
+
+    private final ChannelRepository channelRepository;
+    private final ChannelMemberRepository channelMemberRepository;
+    private final MessageRepository messageRepository;
+    private final ProjectRepository projectRepository;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final UserRepository userRepository;
+
+    @GetMapping
+    @Transactional(readOnly = true)
+    public List<ChannelResponse> getChannels(Authentication authentication) {
+        User actor = currentUser(authentication);
+        List<UUID> projectIds = projectMemberRepository.findByUser_Id(actor.getId()).stream()
+                .map(member -> member.getProject().getId()).toList();
+        List<Channel> visible = projectIds.isEmpty()
+                ? channelRepository.findByDmMembership(actor.getId())
+                : mergeChannels(channelRepository.findByProjectIds(projectIds),
+                        channelRepository.findByDmMembership(actor.getId()));
+        return visible.stream().map(channel -> toResponse(channel, actor)).toList();
+    }
+
+    /** Solo el propietario o un ADMIN puede crear salas dentro del proyecto. */
+    @PostMapping
+    @Transactional
+    public ResponseEntity<ChannelResponse> createChannel(@Valid @RequestBody ChannelRequest request,
+                                                         Authentication authentication) {
+        User actor = currentUser(authentication);
+        Project project = projectRepository.findById(request.projectId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proyecto no encontrado"));
+        requireProjectManager(project, actor);
+        String type = validateChannelType(request.type());
+        String name = request.name().trim();
+        if (channelRepository.existsByProject_IdAndName(project.getId(), name)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe una sala con ese nombre");
+        }
+        Channel channel = channelRepository.save(Channel.builder()
+                .type(type).name(name).project(project).createdBy(actor).build());
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(channel, actor));
+    }
+
+    /** DM global: idempotente por par de usuarios (devuelve el existente si ya lo hay). */
+    @PostMapping("/direct")
+    @Transactional
+    public ResponseEntity<ChannelResponse> createDirect(@Valid @RequestBody DirectChannelRequest request,
+                                                        Authentication authentication) {
+        User actor = currentUser(authentication);
+        User target = userRepository.findById(request.memberId()).filter(User::isActive)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no disponible"));
+        if (actor.getId().equals(target.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No puedes abrir un DM contigo mismo");
+        }
+        boolean actorFirst = actor.getId().compareTo(target.getId()) < 0;
+        UUID dmUserLow = actorFirst ? actor.getId() : target.getId();
+        UUID dmUserHigh = actorFirst ? target.getId() : actor.getId();
+
+        return channelRepository.findByDmUserLowAndDmUserHigh(dmUserLow, dmUserHigh)
+                .<ResponseEntity<ChannelResponse>>map(channel -> ResponseEntity.ok(toResponse(channel, actor)))
+                .orElseGet(() -> {
+                    Channel channel = channelRepository.save(Channel.builder().type(Channel.TYPE_TEXT)
+                            .dmUserLow(dmUserLow).dmUserHigh(dmUserHigh).createdBy(actor).build());
+                    channelMemberRepository.save(ChannelMember.builder().channel(channel).user(actor).build());
+                    channelMemberRepository.save(ChannelMember.builder().channel(channel).user(target).build());
+                    return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(channel, actor));
+                });
+    }
+
+    /** Paginación por cursor: devuelve hasta `limit` mensajes anteriores a `before`, en orden ascendente. */
+    @GetMapping("/{id}/messages")
+    @Transactional(readOnly = true)
+    public List<ChatMessageResponse> getMessages(@PathVariable UUID id,
+                                                 @RequestParam(name = "before", required = false) UUID before,
+                                                 @RequestParam(name = "limit", defaultValue = "50") int limit,
+                                                 Authentication authentication) {
+        User actor = currentUser(authentication);
+        Channel channel = requireChannelAccess(id, actor);
+        Pageable page = PageRequest.of(0, Math.min(Math.max(limit, 1), MAX_MESSAGE_PAGE_SIZE));
+        List<Message> raw;
+        if (before != null) {
+            Message cursor = messageRepository.findById(before)
+                    .filter(message -> message.getChannel().getId().equals(channel.getId()))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Cursor de paginación no válido"));
+            raw = messageRepository.findBefore(channel.getId(), cursor.getCreatedAt(), cursor.getId(), page);
+        } else {
+            raw = messageRepository.findLatestPage(channel.getId(), page);
+        }
+        List<Message> ascending = new ArrayList<>(raw);
+        java.util.Collections.reverse(ascending);
+        return ascending.stream().map(this::toMessageResponse).toList();
+    }
+
+    @PostMapping("/{id}/messages")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
+    public ChatMessageResponse createMessage(@PathVariable UUID id, @Valid @RequestBody ChatMessageRequest request,
+                                             Authentication authentication) {
+        User sender = currentUser(authentication);
+        Channel channel = requireChannelAccess(id, sender);
+        Message message = messageRepository.save(Message.builder()
+                .channel(channel).sender(sender).body(request.body().trim()).build());
+        return toMessageResponse(message);
+    }
+
+    private Channel requireChannelAccess(UUID channelId, User actor) {
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Canal no encontrado"));
+        boolean allowed;
+        if (channel.getProject() != null) {
+            allowed = RoleNames.normalize(actor.getRole()).equals("ADMIN")
+                    || projectMemberRepository.existsByProject_IdAndUser_Id(channel.getProject().getId(), actor.getId());
+        } else {
+            allowed = channelMemberRepository.existsByChannel_IdAndUser_Id(channel.getId(), actor.getId());
+        }
+        if (!allowed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Debes pertenecer al canal para verlo o escribir en él");
+        }
+        return channel;
+    }
+
+    private String validateChannelType(@Nullable String type) {
+        String normalized = (type == null || type.isBlank()) ? Channel.TYPE_TEXT : type.toUpperCase();
+        if (!Channel.TYPE_TEXT.equals(normalized)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Tipo de canal no disponible todavía; solo se permiten salas de texto");
+        }
+        return normalized;
+    }
+
+    private void requireProjectManager(Project project, User actor) {
+        if (!project.getOwner().getId().equals(actor.getId()) && !RoleNames.normalize(actor.getRole()).equals("ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Solo el propietario o un administrador puede crear salas en el proyecto");
+        }
+    }
+
+    private User currentUser(Authentication authentication) {
+        return userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+    }
+
+    private List<Channel> mergeChannels(List<Channel> direct, List<Channel> rooms) {
+        Map<UUID, Channel> byId = new LinkedHashMap<>();
+        for (Channel channel : direct) byId.put(channel.getId(), channel);
+        for (Channel channel : rooms) byId.putIfAbsent(channel.getId(), channel);
+        return byId.values().stream()
+                .sorted(Comparator.comparing(Channel::getCreatedAt).reversed())
+                .toList();
+    }
+
+    private ChannelResponse toResponse(Channel channel, User actor) {
+        if (channel.getProject() != null) {
+            return new ChannelResponse(channel.getId(), channel.getType(), channel.getName(),
+                    channel.getProject().getId(), null, null, channel.getCreatedAt());
+        }
+        return channelMemberRepository.findByChannel_IdOrderByJoinedAtAsc(channel.getId()).stream()
+                .filter(member -> !member.getUser().getId().equals(actor.getId()))
+                .findFirst()
+                .map(other -> new ChannelResponse(channel.getId(), channel.getType(), null, null,
+                        other.getUser().getId(), other.getUser().getFullName(), channel.getCreatedAt()))
+                .orElseGet(() -> new ChannelResponse(channel.getId(), channel.getType(), null, null,
+                        null, null, channel.getCreatedAt()));
+    }
+
+    private ChatMessageResponse toMessageResponse(Message message) {
+        User author = message.getSender();
+        String name = author.getFullName() == null || author.getFullName().isBlank()
+                ? author.getEmail() : author.getFullName();
+        return new ChatMessageResponse(message.getId(), message.getBody(), author.getId(), name,
+                author.getEmail(), message.getCreatedAt());
+    }
+}

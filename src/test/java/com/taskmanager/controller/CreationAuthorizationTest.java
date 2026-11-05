@@ -98,6 +98,7 @@ class CreationAuthorizationTest {
         @Bean UserRepository userRepository() { return mock(UserRepository.class); }
         @Bean ProjectRepository projectRepository() { return mock(ProjectRepository.class); }
         @Bean ProjectMemberRepository projectMemberRepository() { return mock(ProjectMemberRepository.class); }
+        @Bean ChannelRepository channelRepository() { return mock(ChannelRepository.class); }
         @Bean NotificationEventService notificationEventService() { return mock(NotificationEventService.class); }
         @Bean SubscriptionService subscriptionService() { return mock(SubscriptionService.class); }
 
@@ -108,8 +109,9 @@ class CreationAuthorizationTest {
 
         @Bean ProjectController projectController(ProjectRepository projects, TaskRepository tasks,
                                                   ProjectMemberRepository members, UserRepository users,
-                                                  NotificationEventService notifications, SubscriptionService subscriptions) {
-            return new ProjectController(projects, tasks, members, users, notifications, subscriptions);
+                                                  NotificationEventService notifications, SubscriptionService subscriptions,
+                                                  com.taskmanager.repository.ChannelRepository channels) {
+            return new ProjectController(projects, tasks, members, users, notifications, subscriptions, channels);
         }
     }
 }
