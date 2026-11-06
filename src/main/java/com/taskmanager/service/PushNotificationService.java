@@ -138,26 +138,17 @@ public class PushNotificationService implements InitializingBean {
             if (data != null) payload.putAll(data);
             payload.put("timestamp", System.currentTimeMillis());
 
-            byte[] payloadBytes = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(payload);
-
-            byte[] encrypted = encryptPayload(payloadBytes, sub.getP256dhKey(), sub.getAuthKey());
-            byte[] salt = Arrays.copyOfRange(encrypted, 0, SALT_SIZE);
-            byte[] ciphertext = Arrays.copyOfRange(encrypted, SALT_SIZE, encrypted.length);
+            String jsonPayload = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
 
             String vapidJwt = createVapidJwt(sub.getEndpoint());
 
-            String saltB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(salt);
-            String vapidPublicKeyB64 = encodeVapidPublicKey(vapidPublicKey);
-
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(sub.getEndpoint()))
-                    .header("Content-Type", "application/octet-stream")
-                    .header("Encryption", "salt=" + saltB64)
-                    .header("Crypto-Key", "p256ecdsa=" + vapidPublicKeyB64)
+                    .header("Content-Type", "application/json")
                     .header("TTL", "86400")
                     .header("Urgency", "high")
                     .header("Authorization", "WebPush " + vapidJwt)
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(ciphertext))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .timeout(java.time.Duration.ofSeconds(10))
                     .build();
 
@@ -180,63 +171,6 @@ public class PushNotificationService implements InitializingBean {
         } catch (Exception e) {
             log.warn("Error preparando push para {}: {}", sub.getEndpoint(), e.getMessage());
         }
-    }
-
-    private byte[] encryptPayload(byte[] payload, String p256dhKeyB64, String authKeyB64) throws Exception {
-        SecureRandom random = new SecureRandom();
-        byte[] salt = new byte[SALT_SIZE];
-        random.nextBytes(salt);
-
-        PublicKey clientPublicKey = decodeP256dhPublicKey(p256dhKeyB64);
-        byte[] authSecret = Base64.getUrlDecoder().decode(authKeyB64);
-
-        KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH");
-        keyAgreement.init(vapidPrivateKey);
-        keyAgreement.doPhase(clientPublicKey, true);
-        byte[] sharedSecret = keyAgreement.generateSecret();
-
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(authSecret, "HmacSHA256"));
-        byte[] prk = mac.doFinal(sharedSecret);
-
-        byte[] infoCek = ("Content-Encoding: " + PUSH_ENCODING).getBytes(StandardCharsets.UTF_8);
-        byte[] keyMaterial = hkdfExpand(prk, salt, infoCek, KEY_SIZE + NONCE_SIZE);
-        byte[] cek = Arrays.copyOfRange(keyMaterial, 0, KEY_SIZE);
-        byte[] nonce = Arrays.copyOfRange(keyMaterial, KEY_SIZE, KEY_SIZE + NONCE_SIZE);
-
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        GCMParameterSpec gcmSpec = new GCMParameterSpec(128, nonce);
-        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(cek, "AES"), gcmSpec);
-        byte[] ciphertext = cipher.doFinal(payload);
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        baos.write(salt);
-        baos.write(ciphertext);
-        return baos.toByteArray();
-    }
-
-    private byte[] hkdfExpand(byte[] prk, byte[] salt, byte[] info, int length) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(prk, "HmacSHA256"));
-
-        int hashLen = 32;
-        int blocks = (int) Math.ceil((double) length / hashLen);
-        ByteArrayOutputStream result = new ByteArrayOutputStream();
-
-        byte[] counter = new byte[]{0x00};
-        byte[] prev = new byte[0];
-
-        for (int i = 1; i <= blocks; i++) {
-            mac.update(prev);
-            mac.update(info);
-            mac.update(counter);
-            prev = mac.doFinal();
-            result.write(prev);
-            counter[0] = (byte) (counter[0] + 1);
-        }
-
-        byte[] full = result.toByteArray();
-        return Arrays.copyOf(full, length);
     }
 
     private String createVapidJwt(String audience) {
