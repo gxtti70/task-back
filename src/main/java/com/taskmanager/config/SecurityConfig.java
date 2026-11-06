@@ -125,6 +125,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/subscriptions/dev-activate/**").hasRole("ADMIN")
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                // Clave pública VAPID para notificaciones push (sin auth, necesaria para suscribirse).
+                .requestMatchers(HttpMethod.GET, "/api/push/vapid-public-key").permitAll()
 
                 // Cualquier otra petición requiere JWT
                 .anyRequest().authenticated()
