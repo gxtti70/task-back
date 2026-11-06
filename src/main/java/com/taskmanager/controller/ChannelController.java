@@ -19,6 +19,7 @@ import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.RoleNames;
 import com.taskmanager.service.ChatFileService;
 import com.taskmanager.service.ChatUnreadService;
+import com.taskmanager.service.PushNotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -41,7 +42,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/channels")
@@ -57,6 +60,7 @@ public class ChannelController {
     private final UserRepository userRepository;
     private final ChatFileService chatFileService;
     private final ChatUnreadService chatUnreadService;
+    private final PushNotificationService pushNotificationService;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -150,6 +154,19 @@ public class ChannelController {
         Channel channel = requireChannelAccess(id, sender);
         Message message = messageRepository.save(Message.builder()
                 .channel(channel).sender(sender).body(request.body().trim()).build());
+        // Notificación push a los miembros del canal (excepto el remitente)
+        var memberIds = channelMemberRepository.findByChannel_IdOrderByJoinedAtAsc(channel.getId()).stream()
+                .map(m -> m.getUser().getId())
+                .collect(Collectors.toSet());
+        Map<String, String> data = Map.of(
+                "type", "message",
+                "messageId", message.getId().toString(),
+                "senderId", sender.getId().toString(),
+                "senderName", sender.getFullName()
+        );
+        pushNotificationService.sendPushToChannelMembers(memberIds, sender.getId(),
+                "Nuevo mensaje en " + (channel.getName() != null ? channel.getName() : "conversación"),
+                request.body().trim(), channel.getId().toString(), data);
         return toMessageResponse(message);
     }
 
@@ -160,7 +177,26 @@ public class ChannelController {
                                           @RequestParam("file") MultipartFile file,
                                           @RequestParam(name = "body", required = false) String body,
                                           Authentication authentication) {
-        return chatFileService.saveFileMessage(id, file, body, authentication.getName());
+        User sender = currentUser(authentication);
+        Channel channel = requireChannelAccess(id, sender);
+        ChatMessageResponse response = chatFileService.saveFileMessage(id, file, body, authentication.getName());
+        // Notificación push a los miembros del canal (excepto el remitente)
+        var memberIds = channelMemberRepository.findByChannel_IdOrderByJoinedAtAsc(channel.getId()).stream()
+                .map(m -> m.getUser().getId())
+                .collect(Collectors.toSet());
+        String fileLabel = (file.getContentType() != null && file.getContentType().startsWith("image/")) ? "una imagen"
+                : (file.getContentType() != null && file.getContentType().startsWith("audio/")) ? "un audio"
+                : "un archivo";
+        Map<String, String> data = Map.of(
+                "type", "file",
+                "messageId", response.id() != null ? response.id().toString() : "",
+                "senderId", sender.getId().toString(),
+                "senderName", sender.getFullName()
+        );
+        pushNotificationService.sendPushToChannelMembers(memberIds, sender.getId(),
+                "Nuevo archivo en " + (channel.getName() != null ? channel.getName() : "conversación"),
+                "Te enviaron " + fileLabel, channel.getId().toString(), data);
+        return response;
     }
 
     @GetMapping("/{id}/messages/{messageId}/file")
