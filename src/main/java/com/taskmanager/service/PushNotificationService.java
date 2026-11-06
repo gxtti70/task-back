@@ -257,7 +257,7 @@ public class PushNotificationService implements InitializingBean {
 
     private KeyPair generateVapidKeyPair() throws Exception {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC");
-        keyGen.initialize(new ECGenParameterSpec("P-256"), new SecureRandom());
+        keyGen.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
         return keyGen.generateKeyPair();
     }
 
