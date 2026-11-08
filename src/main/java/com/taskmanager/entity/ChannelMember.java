@@ -34,6 +34,9 @@ public class ChannelMember {
     @Column(name = "last_read_at")
     private LocalDateTime lastReadAt;
 
+    @Column(name = "last_delivered_at")
+    private LocalDateTime lastDeliveredAt;
+
     @PrePersist
     void setJoinedAtIfMissing() {
         if (joinedAt == null) joinedAt = LocalDateTime.now();

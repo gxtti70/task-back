@@ -160,7 +160,8 @@ class ChannelControllerTest {
         when(projectMembers.existsByProject_IdAndUser_Id(projectId, outsider.getId())).thenReturn(false);
 
         var readError = assertThrows(ResponseStatusException.class,
-                () -> controller.getMessages(channel.getId(), null, 50, auth("outsider@example.test", "DEVELOPER")));
+                () -> controller.getMessages(channel.getId(), null, 50, false,
+                        auth("outsider@example.test", "DEVELOPER")));
         assertEquals(HttpStatus.FORBIDDEN, readError.getStatusCode());
         verify(messages, never()).findLatestPage(any(), any(Pageable.class));
 
@@ -180,7 +181,8 @@ class ChannelControllerTest {
         when(channelMembers.existsByChannel_IdAndUser_Id(dm.getId(), outsider.getId())).thenReturn(false);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> controller.getMessages(dm.getId(), null, 50, auth("outsider@example.test", "DEVELOPER")));
+                () -> controller.getMessages(dm.getId(), null, 50, false,
+                        auth("outsider@example.test", "DEVELOPER")));
 
         assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
         verify(messages, never()).findLatestPage(any(), any(Pageable.class));
@@ -200,7 +202,7 @@ class ChannelControllerTest {
         when(channels.findById(channel.getId())).thenReturn(Optional.of(channel));
         when(messages.findLatestPage(eq(channel.getId()), any(Pageable.class))).thenReturn(List.of(m2, m1));
 
-        List<ChatMessageResponse> page = controller.getMessages(channel.getId(), null, 50,
+        List<ChatMessageResponse> page = controller.getMessages(channel.getId(), null, 50, false,
                 auth(actor.getEmail(), "MANAGER"));
 
         assertEquals(2, page.size());
@@ -224,7 +226,8 @@ class ChannelControllerTest {
         when(messages.findById(cursorId)).thenReturn(Optional.of(cursor));
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> controller.getMessages(channel.getId(), cursorId, 50, auth(actor.getEmail(), "MANAGER")));
+                () -> controller.getMessages(channel.getId(), cursorId, 50, false,
+                        auth(actor.getEmail(), "MANAGER")));
 
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         verify(messages, never()).findBefore(any(), any(), any(), any(Pageable.class));

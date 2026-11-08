@@ -3,11 +3,13 @@ package com.taskmanager.service;
 import com.taskmanager.config.TaskManagerProperties;
 import com.taskmanager.dto.response.ChatMessageResponse;
 import com.taskmanager.entity.Message;
+import com.taskmanager.entity.User;
 import com.taskmanager.repository.ChannelMemberRepository;
 import com.taskmanager.repository.ChannelRepository;
 import com.taskmanager.repository.MessageRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.RoleNames;
+import com.taskmanager.service.ChatUnreadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -23,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -34,6 +37,7 @@ public class ChatFileService {
     private final ChannelRepository channels;
     private final ChannelMemberRepository channelMembers;
     private final UserRepository users;
+    private final ChatUnreadService chatUnreadService;
     private final TaskManagerProperties properties;
 
     @Transactional
@@ -83,7 +87,8 @@ public class ChatFileService {
                 .messageType("FILE")
                 .build());
 
-        return toResponse(message);
+        List<ChatUnreadService.MemberWatermark> watermarks = chatUnreadService.memberWatermarks(channel.getId());
+        return toResponse(message, watermarks);
     }
 
     @Transactional(readOnly = true)
@@ -198,13 +203,26 @@ public class ChatFileService {
         return filename.replaceAll("[\"\\r\\n]", "_");
     }
 
-    private ChatMessageResponse toResponse(Message message) {
+    private ChatMessageResponse toResponse(Message message, List<ChatUnreadService.MemberWatermark> watermarks) {
+        User author = message.getSender();
+        String name = author.getFullName() == null || author.getFullName().isBlank()
+                ? author.getEmail() : author.getFullName();
+        var createdAt = message.getCreatedAt();
+        int recipientCount = 0;
+        int deliveredCount = 0;
+        int readCount = 0;
+        for (var w : watermarks) {
+            if (w.userId().equals(author.getId())) continue;
+            recipientCount++;
+            if (w.lastDeliveredAt() != null && !w.lastDeliveredAt().isBefore(createdAt)) deliveredCount++;
+            if (w.lastReadAt() != null && !w.lastReadAt().isBefore(createdAt)) readCount++;
+        }
         return new ChatMessageResponse(
-                message.getId(), message.getBody(), message.getSender().getId(),
-                message.getSender().getFullName(), message.getSender().getEmail(),
-                message.getCreatedAt(), message.getMessageType(),
+                message.getId(), message.getBody(), author.getId(), name, author.getEmail(),
+                createdAt, message.getMessageType(),
                 message.getFileName(), message.getFileContentType(), message.getFileSizeBytes(),
-                "/api/channels/" + message.getChannel().getId() + "/messages/" + message.getId() + "/file"
+                "/api/channels/" + message.getChannel().getId() + "/messages/" + message.getId() + "/file",
+                deliveredCount, readCount, recipientCount
         );
     }
 }

@@ -122,13 +122,17 @@ public class ChannelController {
 
     /** Paginación por cursor: devuelve hasta `limit` mensajes anteriores a `before`, en orden ascendente. */
     @GetMapping("/{id}/messages")
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ChatMessageResponse> getMessages(@PathVariable UUID id,
                                                  @RequestParam(name = "before", required = false) UUID before,
                                                  @RequestParam(name = "limit", defaultValue = "50") int limit,
+                                                 @RequestParam(name = "deliver", defaultValue = "false") boolean deliver,
                                                  Authentication authentication) {
         User actor = currentUser(authentication);
         Channel channel = requireChannelAccess(id, actor);
+        if (deliver && before == null) {
+            chatUnreadService.markDeliveredForChannel(id, actor.getEmail());
+        }
         Pageable page = PageRequest.of(0, Math.min(Math.max(limit, 1), MAX_MESSAGE_PAGE_SIZE));
         List<Message> raw;
         if (before != null) {
@@ -142,7 +146,8 @@ public class ChannelController {
         }
         List<Message> ascending = new ArrayList<>(raw);
         java.util.Collections.reverse(ascending);
-        return ascending.stream().map(this::toMessageResponse).toList();
+        List<ChatUnreadService.MemberWatermark> watermarks = chatUnreadService.memberWatermarks(channel.getId());
+        return ascending.stream().map(m -> toMessageResponse(m, watermarks)).toList();
     }
 
     @PostMapping("/{id}/messages")
@@ -167,7 +172,8 @@ public class ChannelController {
         pushNotificationService.sendPushToChannelMembers(memberIds, sender.getId(),
                 "Nuevo mensaje en " + (channel.getName() != null ? channel.getName() : "conversación"),
                 request.body().trim(), channel.getId().toString(), data);
-        return toMessageResponse(message);
+        List<ChatUnreadService.MemberWatermark> watermarks = chatUnreadService.memberWatermarks(channel.getId());
+        return toMessageResponse(message, watermarks);
     }
 
     @PostMapping("/{id}/messages/file")
@@ -246,6 +252,22 @@ public class ChannelController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Marca como entregado este canal para el usuario autenticado. */
+    @PostMapping("/{id}/deliver")
+    @Transactional
+    public ResponseEntity<Void> markChannelDelivered(@PathVariable UUID id, Authentication authentication) {
+        chatUnreadService.markDeliveredForChannel(id, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Marca como entregados todos los canales del usuario autenticado (con throttle de 30 s). */
+    @PostMapping("/deliver")
+    @Transactional
+    public ResponseEntity<Void> markAllDelivered(Authentication authentication) {
+        chatUnreadService.markAllDelivered(authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     private Channel requireChannelAccess(UUID channelId, User actor) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Canal no encontrado"));
@@ -306,15 +328,26 @@ public class ChannelController {
                         null, null, channel.getCreatedAt()));
     }
 
-    private ChatMessageResponse toMessageResponse(Message message) {
+    private ChatMessageResponse toMessageResponse(Message message, List<ChatUnreadService.MemberWatermark> watermarks) {
         User author = message.getSender();
         String name = author.getFullName() == null || author.getFullName().isBlank()
                 ? author.getEmail() : author.getFullName();
+        String downloadUrl = message.getFileStorageKey() != null
+                ? "/api/channels/" + message.getChannel().getId() + "/messages/" + message.getId() + "/file"
+                : null;
+        var createdAt = message.getCreatedAt();
+        int recipientCount = 0;
+        int deliveredCount = 0;
+        int readCount = 0;
+        for (var w : watermarks) {
+            if (w.userId().equals(author.getId())) continue;
+            recipientCount++;
+            if (w.lastDeliveredAt() != null && !w.lastDeliveredAt().isBefore(createdAt)) deliveredCount++;
+            if (w.lastReadAt() != null && !w.lastReadAt().isBefore(createdAt)) readCount++;
+        }
         return new ChatMessageResponse(message.getId(), message.getBody(), author.getId(), name,
-                author.getEmail(), message.getCreatedAt(), message.getMessageType(),
+                author.getEmail(), createdAt, message.getMessageType(),
                 message.getFileName(), message.getFileContentType(), message.getFileSizeBytes(),
-                message.getFileStorageKey() != null
-                        ? "/api/channels/" + message.getChannel().getId() + "/messages/" + message.getId() + "/file"
-                        : null);
+                downloadUrl, deliveredCount, readCount, recipientCount);
     }
 }
