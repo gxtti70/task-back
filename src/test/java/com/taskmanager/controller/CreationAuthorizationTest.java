@@ -5,6 +5,7 @@ import com.taskmanager.dto.request.TaskRequest;
 import com.taskmanager.entity.User;
 import com.taskmanager.repository.*;
 import com.taskmanager.service.NotificationEventService;
+import com.taskmanager.service.PresenceService;
 import com.taskmanager.service.SubscriptionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -100,11 +101,13 @@ class CreationAuthorizationTest {
         @Bean ProjectMemberRepository projectMemberRepository() { return mock(ProjectMemberRepository.class); }
         @Bean ChannelRepository channelRepository() { return mock(ChannelRepository.class); }
         @Bean NotificationEventService notificationEventService() { return mock(NotificationEventService.class); }
+        @Bean PresenceService presenceService() { return mock(PresenceService.class); }
         @Bean SubscriptionService subscriptionService() { return mock(SubscriptionService.class); }
 
         @Bean TaskController taskController(TaskRepository tasks, UserRepository users, ProjectRepository projects,
-                                            ProjectMemberRepository members, NotificationEventService notifications) {
-            return new TaskController(tasks, users, projects, members, notifications);
+                                            ProjectMemberRepository members, NotificationEventService notifications,
+                                            PresenceService presenceService) {
+            return new TaskController(tasks, users, projects, members, notifications, presenceService);
         }
 
         @Bean ProjectController projectController(ProjectRepository projects, TaskRepository tasks,

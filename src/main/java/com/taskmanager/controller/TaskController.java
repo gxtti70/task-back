@@ -7,6 +7,7 @@ import com.taskmanager.dto.response.UserSummaryResponse;
 import com.taskmanager.entity.*;
 import com.taskmanager.repository.*;
 import com.taskmanager.service.NotificationEventService;
+import com.taskmanager.service.PresenceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,7 @@ public class TaskController {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository memberRepository;
     private final NotificationEventService notifications;
+    private final PresenceService presenceService;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -162,7 +164,8 @@ public class TaskController {
                 + "&background=27272a&color=a1a1aa&bold=true";
         return new TaskResponse(task.getId(), task.getTitle(), task.getDescription(), task.getStatus(),
                 task.getPriority(), task.getStoryPoints(), task.getDueDate(),
-                new UserSummaryResponse(user.getId(), user.getEmail(), displayName, user.getRole(), avatar),
+                new UserSummaryResponse(user.getId(), user.getEmail(), displayName, user.getRole(), avatar,
+                        presenceService.effectiveStatus(user), user.getLastSeenAt()),
                 List.copyOf(task.getTags()), task.getProject() == null ? null : task.getProject().getId(), task.getCreatedAt());
     }
 }

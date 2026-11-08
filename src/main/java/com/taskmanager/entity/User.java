@@ -7,9 +7,7 @@ import lombok.*;
 import org.hibernate.annotations.GenericGenerator;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
-
-@Entity
+import java.util.UUID;@Entity
 @Table(name = "users")
 @Getter @Setter
 @NoArgsConstructor
@@ -47,6 +45,17 @@ public class User {
 
     @Column(name = "profile_accent_color", length = 7)
     private String profileAccentColor;
+
+    @Column(name = "presence_status", length = 32, nullable = false)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Builder.Default
+    private PresenceStatus presenceStatus = PresenceStatus.AVAILABLE;
+
+    @Column(name = "presence_updated_at")
+    private LocalDateTime presenceUpdatedAt;
+
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
 
     @NotBlank
     @Column(name = "password_hash", nullable = false)

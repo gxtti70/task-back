@@ -2,6 +2,7 @@ package com.taskmanager.service;
 
 import com.taskmanager.config.VapidProperties;
 import com.taskmanager.entity.PushSubscription;
+import com.taskmanager.entity.PresenceStatus;
 import com.taskmanager.entity.User;
 import com.taskmanager.repository.PushSubscriptionRepository;
 import com.taskmanager.repository.UserRepository;
@@ -52,6 +53,7 @@ public class PushNotificationService implements InitializingBean {
 
     private final PushSubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
+    private final PresenceService presenceService;
     private final VapidProperties vapidProperties;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(java.time.Duration.ofSeconds(10))
@@ -123,8 +125,15 @@ public class PushNotificationService implements InitializingBean {
 
     @Async
     public void sendPushToChannelMembers(Set<UUID> memberIds, UUID senderId, String title, String body, String channelId, Map<String, String> data) {
+        List<User> members = userRepository.findAllById(memberIds);
+        Map<UUID, User> memberById = new HashMap<>();
+        for (User member : members) memberById.put(member.getId(), member);
         for (UUID memberId : memberIds) {
             if (memberId.equals(senderId)) continue;
+            User member = memberById.get(memberId);
+            if (member == null) continue;
+            // "No molestar" suprime el push para ese destinatario.
+            if (presenceService.effectiveStatus(member) == PresenceStatus.DO_NOT_DISTURB) continue;
             sendPushToUser(memberId, title, body, channelId, data);
         }
     }
