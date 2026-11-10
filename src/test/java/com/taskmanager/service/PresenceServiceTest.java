@@ -137,5 +137,35 @@ class PresenceServiceTest {
         assertNotNull(entry);
         assertEquals(userId, entry.userId());
         assertEquals(PresenceStatus.BUSY, entry.status());
+        assertNotNull(entry.lastSeenAt());
+    }
+
+    @Test
+    void appearOfflineOcultaLaMarcaDeUltimaConexion() {
+        User u = user(PresenceStatus.APPEAR_OFFLINE, LocalDateTime.now());
+
+        assertNull(service.visibleLastSeenAt(u));
+    }
+
+    @Test
+    void visibleLastSeenAtConservaLaMarcaParaElRestoDeEstados() {
+        LocalDateTime lastSeen = LocalDateTime.now().minusMinutes(5);
+
+        assertEquals(lastSeen, service.visibleLastSeenAt(user(PresenceStatus.OFFLINE, lastSeen)));
+        assertEquals(lastSeen, service.visibleLastSeenAt(user(PresenceStatus.OUT_OF_OFFICE, lastSeen)));
+        assertEquals(lastSeen, service.visibleLastSeenAt(user(PresenceStatus.AWAY, lastSeen)));
+    }
+
+    @Test
+    void presenceMapNoExponeLaMarcaDeQuienPareceDesconectado() {
+        User u = user(PresenceStatus.APPEAR_OFFLINE, LocalDateTime.now());
+        when(users.findAllByActiveTrueOrderByFullNameAsc()).thenReturn(List.of(u));
+
+        Map<UUID, PresenceService.PresenceEntry> map = service.presenceMap();
+
+        PresenceService.PresenceEntry entry = map.get(u.getId());
+        assertNotNull(entry);
+        assertEquals(PresenceStatus.OFFLINE, entry.status());
+        assertNull(entry.lastSeenAt());
     }
 }

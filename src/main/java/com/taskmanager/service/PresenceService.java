@@ -97,6 +97,17 @@ public class PresenceService {
     }
 
     /**
+     * Marca de última conexión que puede ver el resto de usuarios.
+     * Si el usuario eligió "Parecer desconectado" la marca se oculta: su
+     * heartbeat seguiría actualizándola y delataría que está conectado.
+     */
+    public LocalDateTime visibleLastSeenAt(User user) {
+        if (user == null) return null;
+        PresenceStatus stored = user.getPresenceStatus() != null ? user.getPresenceStatus() : PresenceStatus.AVAILABLE;
+        return stored == PresenceStatus.APPEAR_OFFLINE ? null : user.getLastSeenAt();
+    }
+
+    /**
      * Mapa userId -> entrada de presencia para todos los usuarios activos,
      * listo para consumir por el frontend en una sola llamada.
      */
@@ -105,7 +116,7 @@ public class PresenceService {
         List<User> users = userRepository.findAllByActiveTrueOrderByFullNameAsc();
         Map<UUID, PresenceEntry> map = new HashMap<>();
         for (User user : users) {
-            map.put(user.getId(), new PresenceEntry(user.getId(), effectiveStatus(user), user.getLastSeenAt()));
+            map.put(user.getId(), new PresenceEntry(user.getId(), effectiveStatus(user), visibleLastSeenAt(user)));
         }
         return map;
     }

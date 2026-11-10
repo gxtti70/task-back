@@ -350,6 +350,7 @@ public class AuthController {
 
     private AdminUserResponse toAdminResponse(User user) {
         return new AdminUserResponse(user.getId(), user.getEmail(), user.getFullName(),
-                RoleNames.normalize(user.getRole()), user.isActive(), user.getCreatedAt());
+                RoleNames.normalize(user.getRole()), user.isActive(), user.getCreatedAt(),
+                user.getLastSeenAt());
     }
 }

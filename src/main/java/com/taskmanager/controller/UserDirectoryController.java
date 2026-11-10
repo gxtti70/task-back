@@ -31,7 +31,7 @@ public class UserDirectoryController {
                     + "&background=27272a&color=a1a1aa&bold=true";
             PresenceStatus status = presenceService.effectiveStatus(user);
             return new UserSummaryResponse(user.getId(), user.getEmail(), name, user.getRole(), avatar,
-                    status, user.getLastSeenAt());
+                    status, presenceService.visibleLastSeenAt(user));
         }).toList();
     }
 }
