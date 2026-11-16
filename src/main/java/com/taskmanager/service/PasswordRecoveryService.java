@@ -174,7 +174,11 @@ public class PasswordRecoveryService {
 
     private void consumeAttempt(List<PasswordResetCode> active) {
         for (PasswordResetCode row : active) {
-            row.setAttempts(row.getAttempts() + 1);
+            // El contador nunca supera el techo: un código ya agotado se invalida,
+            // pero no se le suma un intento más allá de max_attempts.
+            if (row.getAttempts() < row.getMaxAttempts()) {
+                row.setAttempts(row.getAttempts() + 1);
+            }
             if (row.getAttempts() >= row.getMaxAttempts()) {
                 row.setUsed(true);
                 log.info("Código de verificación invalidado tras agotar los intentos del usuario {}", row.getUser().getId());
