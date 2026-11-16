@@ -20,7 +20,19 @@ Esta matriz documenta las variables que consume actualmente el backend y el Comp
 | `GOOGLE_OAUTH_ENABLED` | `false` hasta configurar OAuth | `true` solo con credenciales de prueba | `true` cuando client ID/secret estén en el gestor de secretos |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Credenciales OAuth de desarrollo | Credenciales de cliente OAuth de pruebas | Client ID público y secret privado de Google Cloud, solo en el backend |
 | `GOOGLE_REDIRECT_URI` | `http://localhost:4300/login/oauth2/code/google` | Callback HTTPS del frontend de pruebas | `https://<frontend-domain>/login/oauth2/code/google`; debe coincidir exactamente en Google Cloud |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Valores locales o vacíos si el correo está simulado | Servidor de correo de pruebas o capturador local | Proveedor de correo real; credenciales secretas y remitente verificado |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Valores locales o vacíos si el correo está simulado | Servidor de correo de pruebas o capturador local | Proveedor de correo real; credenciales secretas y remitente verificado. Opcional si `MAIL_PROVIDER` es `resend` o `gmail-api` |
+| `MAIL_PROVIDER` | `smtp` | `smtp`, `resend` o `gmail-api` según la prueba | `gmail-api` si no hay dominio propio; `resend` si hay dominio verificado. Render bloquea el tráfico saliente SMTP en los planes gratuitos (puertos 25, 465 y 587), así que `smtp` no es utilizable allí |
+| `MAIL_FROM` | Remitente de desarrollo | Remitente de pruebas | Con `gmail-api`, la cuenta Gmail que envía; con `resend`, `TaskManager <no-reply@tudominio.com>` con SPF y DKIM verificados en el dominio |
+| `RESEND_API_KEY` | Vacío | Clave de prueba con permiso de envío | Secreto del gestor de secretos; solo si `MAIL_PROVIDER=resend` |
+| `GMAIL_CLIENT_ID` | Vacío | Client ID de un cliente OAuth de tipo "Desktop app" | Client ID de Google Cloud, solo en el backend; distinto del cliente OAuth del login |
+| `GMAIL_CLIENT_SECRET` | Vacío | Client Secret del cliente OAuth | Secreto del gestor de secretos; solo si `MAIL_PROVIDER=gmail-api` |
+| `GMAIL_REFRESH_TOKEN` | Vacío | Refresh token de largo alcance con el permiso `gmail.send` | Secreto del gestor de secretos; solo si `MAIL_PROVIDER=gmail-api`. La pantalla de consentimiento debe estar en "Producción" para que no caduque a los 7 días |
+| `RESET_CODE_PEPPER` | Valor local fijo | Valor de pruebas | Secreto aleatorio de 32 bytes o más. Su pérdida invalida los códigos pendientes; no se debe rotar sin avisar |
+| `RESET_CODE_REQUIRE_PEPPER` | `false` | `false` | `true`: la aplicación no arranca sin pepper, en lugar de generar uno efímero |
+| `RESET_CODE_TTL_SECONDS` | `600` | `600` | `600` (10 minutos) |
+| `RESET_CODE_MAX_ATTEMPTS` | `5` | `5` | `5` |
+| `RESET_CODE_COOLDOWN_SECONDS` | `60` | `60` | `60` |
+| `RESET_CODE_MIN_RESPONSE_MS` | `500` | `0` para pruebas rápidas | `500`: iguala el tiempo de respuesta entre correos existentes e inexistentes |
 | `ATTACHMENTS_LOCAL_DIRECTORY` | Directorio local/volumen persistente | Directorio temporal de pruebas | Preferir S3; no usar disco efímero del contenedor |
 | `ATTACHMENTS_S3_BUCKET`, `AWS_REGION` | Opcionales | Bucket aislado si se prueba integración | Bucket de producción y región aprobada |
 | Credenciales AWS | Evitar claves estáticas; usar perfil local | Rol/credenciales temporales de CI | Rol de identidad de workload con permisos mínimos; no inyectar claves estáticas |
@@ -39,6 +51,9 @@ Esta matriz documenta las variables que consume actualmente el backend y el Comp
 - Configurar CORS con los orígenes HTTPS exactos y revisar que el cliente use credenciales.
 - Desactivar billing simulado y configurar precios, claves y endpoint webhook de Stripe live antes de aceptar pagos.
 - Configurar correo, almacenamiento persistente, monitoreo y respaldos antes de habilitar usuarios reales.
+- Configurar `MAIL_PROVIDER` según el entorno: `gmail-api` cuando no hay dominio propio (API de Gmail por HTTPS, 500 correos al día gratis) o `resend` cuando el dominio del remitente tenga SPF y DKIM verificados. En cualquier caso, Render bloquea el tráfico saliente SMTP en los puertos 25, 465 y 587, así que `smtp` solo sirve en local.
+- Definir `RESET_CODE_PEPPER` como secreto fuerte y `RESET_CODE_REQUIRE_PEPPER=true` para que la aplicación no arranque sin él.
+- Migrar la base de datos de Render antes de que expire el plan gratuito: las bases gratuitas caducan a los 30 días de su creación y Render las borra tras un periodo de gracia de 14 días.
 - Sustituir datos legales de ejemplo y revisar su contenido con el responsable legal.
 - Para una base ya existente, tomar y verificar un respaldo y comprobar la migración Flyway en una copia antes del despliegue. Usar el procedimiento controlado de `flyway-baseline.md`.
 

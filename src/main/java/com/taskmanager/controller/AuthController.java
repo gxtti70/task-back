@@ -6,22 +6,21 @@ import com.taskmanager.dto.request.LoginRequest;
 import com.taskmanager.dto.request.RegisterRequest;
 import com.taskmanager.dto.request.RegistrationRequest;
 import com.taskmanager.dto.request.ProfileUpdateRequest;
-import com.taskmanager.dto.request.ResetPasswordRequest;
+import com.taskmanager.dto.request.ResetPasswordWithCodeRequest;
 import com.taskmanager.dto.response.AdminUserResponse;
 import com.taskmanager.dto.response.JwtResponse;
 import com.taskmanager.dto.response.MessageResponse;
 import com.taskmanager.dto.response.ProfileResponse;
-import com.taskmanager.entity.PasswordResetToken;
+import com.taskmanager.dto.response.RecoveryRequestResponse;
 import com.taskmanager.entity.User;
 import com.taskmanager.config.AuthCookieService;
 import com.taskmanager.config.TaskManagerProperties;
-import com.taskmanager.repository.PasswordResetTokenRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.security.JwtTokenProvider;
 import com.taskmanager.security.UserDetailsServiceImpl;
 import com.taskmanager.security.RoleNames;
 import com.taskmanager.security.EmailAddresses;
-import com.taskmanager.service.EmailService;
+import com.taskmanager.service.PasswordRecoveryService;
 import com.taskmanager.service.NotificationEventService;
 import com.taskmanager.service.SubscriptionService;
 import com.taskmanager.service.RefreshTokenService;
@@ -47,9 +46,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
@@ -73,8 +70,7 @@ public class AuthController {
     private final UserDetailsServiceImpl userDetailsService;
     private final NotificationEventService notifications;
     private final SubscriptionService subscriptions;
-    private final PasswordResetTokenRepository passwordResetTokenRepository;
-    private final EmailService emailService;
+    private final PasswordRecoveryService passwordRecovery;
     private final RefreshTokenService refreshTokens;
     private final AuthCookieService authCookies;
     private final ConsentService consents;
@@ -240,37 +236,34 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
     }
 
+    /**
+     * Solicita un código de verificación de 6 dígitos.
+     * <p>
+     * La respuesta es idéntica exista o no el correo, para no revelar qué cuentas
+     * están registradas. El código se entrega por correo y caduca a los 10 minutos.
+     */
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        String email = EmailAddresses.normalize(request.getEmail());
-        userRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
-            passwordResetTokenRepository.findByUserIdAndUsedFalse(user.getId())
-                    .forEach(t -> { t.setUsed(true); passwordResetTokenRepository.save(t); });
-            PasswordResetToken token = passwordResetTokenRepository.save(PasswordResetToken.builder()
-                    .user(user)
-                    .token(UUID.randomUUID().toString())
-                    .expiresAt(LocalDateTime.now().plusHours(1))
-                    .build());
-            emailService.sendPasswordResetEmail(user.getEmail(), token.getToken());
-        });
-        return ResponseEntity.ok(new MessageResponse(
-                "Si el email está registrado, recibirás instrucciones para restablecer tu contraseña."));
+        PasswordRecoveryService.RecoveryOutcome outcome = passwordRecovery.requestCode(request.getEmail());
+        return ResponseEntity.ok(new RecoveryRequestResponse(
+                "Si el email está registrado, recibirás un código de 6 dígitos para restablecer tu contraseña.",
+                outcome.resendAvailableInSeconds()));
     }
 
+    /**
+     * Restablece la contraseña con el código recibido por correo.
+     * <p>
+     * El mensaje de error es genérico: no distingue entre un código inexistente,
+     * expirado o agotado, para que el endpoint no sirva de oráculo.
+     */
     @PostMapping("/reset-password")
-    @Transactional
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletResponse response) {
-        PasswordResetToken token = passwordResetTokenRepository.findByToken(request.getToken())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token inválido"));
-        if (token.isUsed()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El token ya fue utilizado");
-        if (token.getExpiresAt().isBefore(LocalDateTime.now()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El token ha expirado");
-        User user = token.getUser();
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        userRepository.save(user);
-        refreshTokens.revokeUser(user.getId());
-        token.setUsed(true);
-        passwordResetTokenRepository.save(token);
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordWithCodeRequest request,
+                                           HttpServletResponse response) {
+        boolean updated = passwordRecovery.verifyAndReset(request.getEmail(), request.getCode(), request.getPassword());
+        if (!updated) {
+            return ResponseEntity.badRequest().body(new MessageResponse(
+                    "El código no es válido o ha expirado. Solicita uno nuevo e inténtalo otra vez."));
+        }
         authCookies.clear(response);
         return ResponseEntity.ok(new MessageResponse("Contraseña actualizada exitosamente"));
     }

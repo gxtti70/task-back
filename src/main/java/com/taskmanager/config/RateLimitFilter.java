@@ -17,6 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * Limitador de tasa en memoria (ventana deslizante) para los endpoints de autenticación.
  * Sin dependencias externas. No sustituye a un limitador distribuido (Redis) en prod,
  * pero elimina fuerza bruta trivial de un solo origen.
+ *
+ * <p>La recuperación por código de 6 dígitos añade además un límite por cuenta en la
+ * base de datos ({@code password_reset_codes.attempts}): este filtro solo conoce la IP
+ * de origen y no protege un código corto frente a un atacante distribuido.
  */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -29,7 +33,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "POST /api/auth/forgot-password", new Rule(5, 600_000),
             "POST /api/auth/reset-password", new Rule(10, 600_000)
     );
-
     private final Map<String, Deque<Long>> hits = new ConcurrentHashMap<>();
 
     @Override

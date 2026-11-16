@@ -2,6 +2,21 @@ taskmanager:
   auth:
     google:
       enabled: ${GOOGLE_OAUTH_ENABLED:false}
+  mail:
+    # smtp (Gmail o relay), resend (API HTTP) o gmail-api (API de Gmail con OAuth2). Render Free bloquea SMTP saliente.
+    provider: ${MAIL_PROVIDER:smtp}
+    from: ${MAIL_FROM:}
+    apiKey: ${RESEND_API_KEY:}
+    clientId: ${GMAIL_CLIENT_ID:}
+    clientSecret: ${GMAIL_CLIENT_SECRET:}
+    refreshToken: ${GMAIL_REFRESH_TOKEN:}
+  password-recovery:
+    pepper: ${RESET_CODE_PEPPER:}
+    require-pepper: ${RESET_CODE_REQUIRE_PEPPER:false}
+    code-ttl-seconds: ${RESET_CODE_TTL_SECONDS:600}
+    max-attempts: ${RESET_CODE_MAX_ATTEMPTS:5}
+    cooldown-seconds: ${RESET_CODE_COOLDOWN_SECONDS:60}
+    min-response-millis: ${RESET_CODE_MIN_RESPONSE_MS:500}
   plans:
     free:
       maxProjects: 3
