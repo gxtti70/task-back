@@ -78,5 +78,8 @@ public class User {
     @PrePersist
     void setCreatedAtIfMissing() {
         if (createdAt == null) createdAt = LocalDateTime.now();
+        // presence_updated_at es NOT NULL en BD (V9); Hibernate inserta la columna
+        // explícitamente y un null anularía el DEFAULT, violando la restricción.
+        if (presenceUpdatedAt == null) presenceUpdatedAt = LocalDateTime.now();
     }
 }

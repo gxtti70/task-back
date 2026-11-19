@@ -71,7 +71,8 @@ public class SecurityConfig {
                 });
                 csrf.csrfTokenRepository(repository)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                        .ignoringRequestMatchers("/api/subscriptions/webhook");
+                        // /error es el despacho interno de errores del contenedor: no lleva CSRF.
+                        .ignoringRequestMatchers("/api/subscriptions/webhook", "/error");
             })
 
             // 3. Manejo de sesiones sin estado
@@ -124,6 +125,9 @@ public class SecurityConfig {
                 // La activación de planes de desarrollo solo para ADMIN, aunque BILLING_SIMULATE=true.
                 .requestMatchers(HttpMethod.POST, "/api/subscriptions/dev-activate/**").hasRole("ADMIN")
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
+                // Despacho interno de errores (sendError): sin él, cualquier error real
+                // se convertía en 401 vacío vía anyRequest().authenticated().
+                .requestMatchers("/error").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 // Clave pública VAPID para notificaciones push (sin auth, necesaria para suscribirse).
                 .requestMatchers(HttpMethod.GET, "/api/push/vapid-public-key").permitAll()
