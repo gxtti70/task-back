@@ -235,11 +235,12 @@ public class CallService {
         }
     }
 
-    private void finish(CallSession session, String reason) {
+    private CallSession finish(CallSession session, String reason) {
         session.state = STATE_ENDED;
         session.endReason = reason;
         session.endedAt = now();
         appendState(session, reason);
+        return session;
     }
 
     private void appendState(CallSession session, String reason) {
